@@ -1,0 +1,128 @@
+#!/bin/bash
+
+clear
+echo "**********************************************************************"
+echo "*"
+echo "*	Make sure that you have MySQL Server installed before you start "
+echo "*"
+echo "**********************************************************************" 
+echo
+echo
+echo -n "Enter MySQL username, root or one with enough privilages, and press [ENTER]: "
+read mysql_username
+echo -n "Enter MySQL password and press [ENTER]: "
+read mysql_password
+echo
+echo
+echo -n "Enter email address to send the ERRORS from the Database script and press [ENTER]: "
+read email_address
+
+InstallHomeFolder=`pwd`
+ip_address=`ifconfig eth0 2>/dev/null|awk '/inet addr:/ {print $2}'|sed 's/addr://'`
+
+### DOING SOME CLEAN-UP
+rm -fr /opt/apache-tomcat-6.0.39 /opt/kuali /opt/kuali_coeus
+
+### SETTING UP TOMCAT
+if [ -f /etc/debian_version ]; then
+	apt-get install -y wget unzip openjdk-6-jdk mailutils
+elif [ -f /etc/redhat-release ]; then
+	yum install -y wget unzip java-1.6.0-openjdk mailx
+fi
+
+cd /opt
+wget http://psg.mtu.edu/pub/apache/tomcat/tomcat-6/v6.0.39/bin/apache-tomcat-6.0.39.tar.gz
+tar zxvf apache-tomcat-6.0.39.tar.gz
+wget http://mirror.cogentco.com/pub/mysql/Connector-J/mysql-connector-java-5.1.30.zip
+unzip mysql-connector-java-5.1.30.zip
+cp mysql-connector-java-5.1.30/mysql-connector-java-5.1.30-bin.jar /opt/apache-tomcat-6.0.39/lib
+rm -fr mysql-connector-java* apache-tomcat-6.0.39.tar.gz
+cp $InstallHomeFolder/catalina.sh /opt/apache-tomcat-6.0.39/bin/catalina.sh
+cd /opt/apache-tomcat-6.0.39/bin
+chmod +x *.sh
+
+### DOWNLOAD KUALI COEUS 5.2
+mkdir -p /opt/kuali_coeus/
+cd /opt/kuali_coeus/
+wget http://downloads.kc.kuali.org/5.0/kc-release-5_2.zip
+unzip kc-release-5_2.zip
+rm -fr kc-release-5_2.zip
+cd /opt
+
+### SETUP MySQL
+if [ -f /etc/debian_version ]; then
+	cp $InstallHomeFolder/my.cnf.Ubuntu /etc/mysql/my.cnf
+	service mysql restart
+elif [ -f /etc/redhat-release ]; then
+	cp $InstallHomeFolder/my.cnf.CentOS_RedHat /etc/my.cnf
+	service mysqld restart
+fi
+
+cd $InstallHomeFolder
+clear
+echo
+echo
+echo "This may take a few minutes... Running the Kuali Coeus Database Scripts"
+mysql -u ${mysql_username} -p${mysql_password} < configure_mysql.sql > mysql.out
+cp KR_DML_01_KRACOEUS-6458_B000.sql /opt/kuali_coeus/db_scripts/current_mysql/5.2.0/dml/KR_DML_01_KRACOEUS-6458_B000.sql
+rm -f /opt/kuali_coeus/db_scripts/main/LOGS/*
+cp get_mysql_errors /opt/kuali_coeus/db_scripts/main/LOGS/
+cp J_KC_Install.sh /opt/kuali_coeus/db_scripts/main/
+
+cd /opt/kuali_coeus/db_scripts/main/
+chmod 0777 *.sh
+./J_KC_Install.sh
+cd /opt/kuali_coeus/db_scripts/main/LOGS
+./get_mysql_errors
+
+grep ERROR /opt/kuali_coeus/db_scripts/main/LOGS/UPGRADE_ERRORS*
+if [ $? -eq 0 ]; then
+	echo " Errors were FOUND "
+	mail -s "Your Database Setup has been completed WITH errors" $email_address < UPGRADE_ERRORS*
+else
+	echo " Errors NOT Found"
+	mail -s "Your Database Setup has been completed WITHOUT errors" $email_address < UPGRADE_ERRORS*
+fi
+                  
+### Kill any current running tomcat before starting a new one...
+for i in $( ps -ef | grep -v "grep" | grep "tomcat" | awk '{print $2}' ); do
+	kill -9 $i
+done
+
+### SETTING UP THE KC APPLICATION
+mkdir -p /opt/kuali/main/dev/
+cp $InstallHomeFolder/kc-config.xml /opt/kuali/main/dev/kc-config.xml
+sed -i "s/127.0.0.1/$ip_address/" /opt/kuali/main/dev/kc-config.xml
+
+rm -fr /opt/apache-tomcat-6.0.39/webapps/kc-*
+cd /opt/kuali_coeus/binary/
+cp kc-ptd.war /opt/apache-tomcat-6.0.39/webapps/kc-dev.war
+cd /opt/apache-tomcat-6.0.39/bin
+./startup.sh
+
+tailf /opt/apache-tomcat-6.0.39/logs/catalina.out &
+   regex="Server startup in"
+      tailf /opt/apache-tomcat-6.0.39/logs/catalina.out | while read line; do
+	if [[ $line =~ $regex ]]; then
+		pkill -9 -P $$ tailf
+	fi
+   done
+
+echo
+echo
+echo
+echo
+echo
+echo
+echo
+echo "If there were no errors, you should be able to access Kuali Coeus at: "
+echo "**********************************************************************"
+echo "*"
+echo "*	http://"${ip_address}":8080/kc-dev       | Login as 'admin' "
+echo "*"
+echo "**********************************************************************" 
+echo "PS: remember to turn off or configure your firewall on the server"
+echo "And you should ingest Rice-KEW.zip & Full-KC-KEW.zip that you can find at /opt/kuali_coeus/db_scripts/main/ "
+echo
+echo
+echo

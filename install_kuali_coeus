@@ -1,24 +1,109 @@
 #!/bin/bash
 
+#DEFINE
+LINUX_DISTRIBUTATION=$(grep -Eo "(Debian|Ubuntu|RedHat|CentOS)" /etc/issue)
+DISTRIBUTATION_VERSION=$(cat /etc/*release | grep VERSION_ID | cut -c 13)
+
 clear
-echo "**********************************************************************"
+
+echo "**********************************************************************************************"
 echo "*"
-echo "*	Make sure that you have MySQL Server installed before you start "
+echo "*	MySQL Server Info and other "
+echo "* P.S: If you haven't set up MySQL, the password you enter will "
+echo "* be used during the MySQL Setup as the root password"
 echo "*"
-echo "**********************************************************************" 
+echo "**********************************************************************************************" 
 echo
 echo
-echo -n "Enter MySQL username, root or one with enough privilages, and press [ENTER]: "
-read mysql_username
-echo -n "Enter MySQL password and press [ENTER]: "
+echo "Enter MySQL username and press [ENTER]: root "
+mysql_username=root
+echo -n "Enter MySQL root password and press [ENTER]: "
 read mysql_password
-echo
 echo
 echo -n "Enter email address to send the ERRORS from the Database script and press [ENTER]: "
 read email_address
 
+clear
+
+echo "**********************************************************************"
+echo "*"
+echo "*	Making sure MySQL is installed "
+echo "*"
+echo "**********************************************************************" 
+echo
+echo
+
+if [ -f /etc/debian_version ]; then
+#	if [ ! -e /etc/mysql/my.cnf ]; then
+	dpkg -l | grep -i mysql-server | head -1 | if [[ "$(cut -d ' ' -f 1)" != "ii" ]]; then
+		echo
+		echo "It looks like MySQL is not installed on your $LINUX_DISTRIBUTATION"
+		echo "Make sure that MySQL is installed & configured and have the root password"
+		echo
+		exit
+		# apt-get install -y mysql-server
+	fi
+
+	echo
+	echo "Ok, it looks like MySQL Server (mysql-server) is installed on your $LINUX_DISTRIBUTATION..."
+	echo
+
+elif [ -f /etc/redhat-release ]; then
+	if [[ $DISTRIBUTATION_VERSION == 7 ]]; then
+		if [[ "$(rpm -q mariadb-server)" == "package mariadb-server is not installed" ]]; then
+			echo
+			echo "It looks like MySQL Server (mariadb-server) is not installed on your $LINUX_DISTRIBUTATION"
+			echo "Installing/setting up MySQL Server (mariadb-server) "
+			echo "===================================================="
+		#	echo "Make sure that MySQL Server (mariadb-server)is installed & configured and have the root password"
+		#	echo
+		#	exit
+			yum install -y mariadb-server mariadb
+			systemctl start mariadb
+			systemctl enable mariadb
+			/usr/bin/mysqladmin -u root password ${mysql_password}
+			/usr/bin/mysqladmin -u root -h `hostname` password ${mysql_password}
+		fi
+	else
+		if [[ "$(rpm -q mysql-server)" == "package mysql-server is not installed" ]]; then
+			echo "It looks like MySQL Server (mysql-server) is not installed on your $LINUX_DISTRIBUTATION"
+			echo "Installing/setting up MySQL Server (mysql-server) "
+			echo "=================================================="
+		#	echo "MySQL username: root "
+		#	mysql_username=root
+		#	echo -n "Enter MySQL root password and press [ENTER]: "
+		#	read mysql_password
+
+			yum install -y mysql-server mysql
+			chkconfig --levels 235 mysqld on
+			service mysqld start
+			/usr/bin/mysqladmin -u root password ${mysql_password}
+			/usr/bin/mysqladmin -u root -h `hostname` password ${mysql_password}
+		fi
+	fi
+
+	echo
+	echo "Ok, it looks like MySQL Server is installed on your $LINUX_DISTRIBUTATION..."
+	echo
+fi
+
+if [ -f /etc/redhat-release ]; then
+	yum install -y net-tools
+	if [[ $DISTRIBUTATION_VERSION == 7 ]]; then
+		systemctl stop firewalld
+	else
+		service iptables stop
+	fi
+fi
+
 InstallHomeFolder=`pwd`
-ip_address=`ifconfig eth0 2>/dev/null|awk '/inet addr:/ {print $2}'|sed 's/addr://'`
+
+### GETTING THE IP ADDRESS
+if [[ $DISTRIBUTATION_VERSION == 7 ]]; then
+	ip_address=`ifconfig eth0 2>/dev/null|awk '/inet / {print $2}'|sed 's/addr://'`
+else
+	ip_address=`ifconfig eth0 2>/dev/null|awk '/inet addr:/ {print $2}'|sed 's/addr://'`
+fi
 
 ### DOING SOME CLEAN-UP
 rm -fr /opt/apache-tomcat-6.0.39 /opt/kuali /opt/kuali_coeus
@@ -44,15 +129,18 @@ chmod +x *.sh
 ### DOWNLOAD KUALI COEUS 5.2
 mkdir -p /opt/kuali_coeus/
 cd /opt/kuali_coeus/
-wget http://downloads.kc.kuali.org/5.0/kc-release-5_2.zip
-unzip kc-release-5_2.zip
-rm -fr kc-release-5_2.zip
+wget http://downloads.kc.kuali.org/5.0/kc-release-5_2_1.zip
+unzip kc-release-5_2_1.zip
+rm -fr kc-release-5_2_1.zip
 cd /opt
 
 ### SETUP MySQL
 if [ -f /etc/debian_version ]; then
 	cp $InstallHomeFolder/my.cnf.Ubuntu /etc/mysql/my.cnf
 	service mysql restart
+elif [[ $DISTRIBUTATION_VERSION == 7 ]]; then
+	cp $InstallHomeFolder/my.cnf.CentOS_7_RedHat /etc/my.cnf
+	systemctl restart mariadb
 elif [ -f /etc/redhat-release ]; then
 	cp $InstallHomeFolder/my.cnf.CentOS_RedHat /etc/my.cnf
 	service mysqld restart
@@ -64,7 +152,6 @@ echo
 echo
 echo "This may take a few minutes... Running the Kuali Coeus Database Scripts"
 mysql -u ${mysql_username} -p${mysql_password} < configure_mysql.sql > mysql.out
-cp KR_DML_01_KRACOEUS-6458_B000.sql /opt/kuali_coeus/db_scripts/current_mysql/5.2.0/dml/KR_DML_01_KRACOEUS-6458_B000.sql
 rm -f /opt/kuali_coeus/db_scripts/main/LOGS/*
 cp get_mysql_errors /opt/kuali_coeus/db_scripts/main/LOGS/
 cp J_KC_Install.sh /opt/kuali_coeus/db_scripts/main/
@@ -121,7 +208,7 @@ echo "*"
 echo "*	http://"${ip_address}":8080/kc-dev       | Login as 'admin' "
 echo "*"
 echo "**********************************************************************" 
-echo "PS: remember to turn off or configure your firewall on the server"
+echo "PS: remember to turn off or configure your firewall on the server... ( Your firewall should be off, but make sure )"
 echo "And you should ingest Rice-KEW.zip & Full-KC-KEW.zip that you can find at /opt/kuali_coeus/db_scripts/main/ "
 echo
 echo

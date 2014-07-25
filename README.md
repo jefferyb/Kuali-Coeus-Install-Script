@@ -6,8 +6,14 @@ This script is meant to automate the various steps involved in installing Kuali 
 
 I've tested it on a fresh Ubuntu Server 14.04 and a CentOS release 6.5... 
 
+## What's new?
+
+* Install of KC 5.2.1
+* Install MySQL/MariaDB if not installed
+
 ## Getting Started
 
-1. Make sure MySQL Server is installed and have root access
-2. Download the zip file & unzip it or use git
-3. Run install_kuali_coeus as root
+1. git clone git://github.com/jefferyb/install_kuali_coeus_bundle.git
+2. cd install_kuali_coeus_bundle
+3. run ./install_kuali_coeus as root
+

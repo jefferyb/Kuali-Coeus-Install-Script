@@ -34,13 +34,11 @@ echo
 echo
 
 if [ -f /etc/debian_version ]; then
-#	if [ ! -e /etc/mysql/my.cnf ]; then
 	dpkg -l | grep -i mysql-server | head -1 | if [[ "$(cut -d ' ' -f 1)" != "ii" ]]; then
 		echo
 		echo "It looks like MySQL is not installed on your $LINUX_DISTRIBUTATION"
 		echo "Make sure that MySQL is installed & configured and have the root password"
 		echo
-		exit
 		apt-get install -y mysql-server
 	fi
 
@@ -55,9 +53,6 @@ elif [ -f /etc/redhat-release ]; then
 			echo "It looks like MySQL Server (mariadb-server) is not installed on your $LINUX_DISTRIBUTATION"
 			echo "Installing/setting up MySQL Server (mariadb-server) "
 			echo "===================================================="
-		#	echo "Make sure that MySQL Server (mariadb-server)is installed & configured and have the root password"
-		#	echo
-		#	exit
 			yum install -y mariadb-server mariadb
 			systemctl start mariadb
 			systemctl enable mariadb
@@ -69,11 +64,6 @@ elif [ -f /etc/redhat-release ]; then
 			echo "It looks like MySQL Server (mysql-server) is not installed on your $LINUX_DISTRIBUTATION"
 			echo "Installing/setting up MySQL Server (mysql-server) "
 			echo "=================================================="
-		#	echo "MySQL username: root "
-		#	mysql_username=root
-		#	echo -n "Enter MySQL root password and press [ENTER]: "
-		#	read mysql_password
-
 			yum install -y mysql-server mysql
 			chkconfig --levels 235 mysqld on
 			service mysqld start
@@ -126,7 +116,7 @@ cp $InstallHomeFolder/catalina.sh /opt/apache-tomcat-6.0.39/bin/catalina.sh
 cd /opt/apache-tomcat-6.0.39/bin
 chmod +x *.sh
 
-### DOWNLOAD KUALI COEUS 5.2
+### DOWNLOAD KUALI COEUS 5.2.1
 mkdir -p /opt/kuali_coeus/
 cd /opt/kuali_coeus/
 wget http://downloads.kc.kuali.org/5.0/kc-release-5_2_1.zip

@@ -8,7 +8,7 @@ I've tested it on a fresh Ubuntu Server 14.04 and a CentOS release 6.5 and 7...
 
 ## What's new?
 
-* Install of KC 5.2.1
+* Install of KC 6.0
 * Install MySQL/MariaDB if not installed
 
 ## Getting Started

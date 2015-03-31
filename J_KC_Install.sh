@@ -1,3 +1,21 @@
+########################################
+# Kuali Coeus, a comprehensive research administration system for higher education.
+# 
+# Copyright 2005-2015 Kuali, Inc.
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+# 
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+########################################
 #!/bin/sh
 
 if [ ! -d LOGS ]
@@ -54,7 +72,7 @@ fi
 # dbtype=`getChoice 'Enter Database Type' ORACLE MYSQL`
 dbtype=MYSQL
 
-# version=`getChoice 'Enter Currently Installed Version' NEW 3.1.1 5.0 5.0.1 5.1 5.1.1 5.2`
+# version=`getChoice 'Enter Currently Installed Version' NEW 3.1.1 5.0 5.0.1 5.1 5.1.1 5.2 5.2.1`
 version=NEW
 
 # un=`getAnswer 'Enter KC Database Username'`
@@ -340,6 +358,23 @@ case "${dbtype}" in
             cd ..
 		fi
 		
+		if [ "${version}" = "5.2.1" ] || [ "${version}" = "5.2" ] || [ "${version}" = "5.1.1" ] || [ "${version}" = "5.1" ] || [ "${version}" = "5.0.1" ] || [ "${version}" = "5.0" ] || [ "${version}" = '3.1.1' ] || [ "${version}" = "NEW" ]
+        then
+            cd KC-RELEASE-6_0_0-SCRIPT
+            if [ "${mode}" = "EMBED" ]
+            then
+                sqlplus "${un}"/"${pw}${DBSvrNm}" < KRC_RICE-RELEASE-6_0_0-Upgrade-ORACLE.sql
+            fi
+            if [ "${InstRice}" = "Y" ]
+            then
+                sqlplus "${Riceun}"/"${Ricepw}${RiceDBSvrNm}" < KR_RICE-RELEASE-6_0_0-Upgrade-ORACLE.sql
+            fi
+            sqlplus "${un}"/"${pw}${DBSvrNm}" < KC-RELEASE-6_0_0-Upgrade-ORACLE.sql
+            sqlplus "${Riceun}"/"${Ricepw}${RiceDBSvrNm}" < KR-RELEASE-6_0_0-Upgrade-ORACLE.sql
+            mv *.log ../LOGS/
+            cd ..
+		fi
+		
 	cd KC-RELEASE-99_9_9-SCRIPT
 	sqlplus "${Riceun}"/"${Ricepw}${RiceDBSvrNm}" < KR-RELEASE-99_9_9-Upgrade-ORACLE.sql
 	mv *.log ../LOGS/
@@ -582,7 +617,24 @@ case "${dbtype}" in
             mv *.log ../LOGS/
             cd ..
         fi
-              
+        
+        if [ "${version}" = "5.2.1" ] || [ "${version}" = "5.2" ] || [ "${version}" = "5.1.1" ] || [ "${version}" = "5.1" ] || [ "${version}" = "5.0.1" ] || [ "${version}" = "5.0" ] || [ "${version}" = '3.1.1' ] || [ "${version}" = "NEW" ]
+        then
+            cd KC-RELEASE-6_0_0-SCRIPT
+            if [ "${mode}" = "EMBED" ]
+            then
+                mysql -u ${un} -p${pw} -D ${DBSvrNm} -s -f < KRC_RICE-RELEASE-6_0_0-Upgrade-MYSQL.sql > KRC_RICE-RELEASE-6_0_0-Upgrade-MYSQL-Install.log 2>&1
+            fi
+            if [ "${InstRice}" = "Y" ]
+            then
+                mysql -u ${Riceun} -p${Ricepw} -D ${RiceDBSvrNm} -s -f < KR_RICE-RELEASE-6_0_0-Upgrade-MYSQL.sql > KR_RICE-RELEASE-6_0_0-Upgrade-MYSQL-Install.log 2>&1
+            fi
+            mysql -u ${un} -p${pw} -D ${DBSvrNm} -s -f < KC-RELEASE-6_0_0-Upgrade-MYSQL.sql > KC-RELEASE-6_0_0-Upgrade-MYSQL-Install.log 2>&1
+            mysql -u ${Riceun} -p${Ricepw} -D ${RiceDBSvrNm} -s -f < KR-RELEASE-6_0_0-Upgrade-MYSQL.sql > KR-RELEASE-6_0_0-Upgrade-MYSQL-Install.log 2>&1
+            mv *.log ../LOGS/
+            cd ..
+        fi
+                      
 		cd KC-RELEASE-99_9_9-SCRIPT
 		mysql -u ${Riceun} -p${Ricepw} -D ${RiceDBSvrNm} -s -f < KR-RELEASE-99_9_9-Upgrade-MYSQL.sql > KR-RELEASE-99_9_9-Upgrade-MYSQL-Install.log 2>&1
 		mv *.log ../LOGS/

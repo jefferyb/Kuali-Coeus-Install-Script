@@ -4,6 +4,25 @@
 LINUX_DISTRIBUTATION=$(grep -Eo "(Debian|Ubuntu|RedHat|CentOS)" /etc/issue)
 DISTRIBUTATION_VERSION=$(cat /etc/*release | grep VERSION_ID | cut -c 13)
 
+# TOMCAT RELATED
+TOMCAT_LINK="http://apache.mirrors.lucidnetworks.net/tomcat/tomcat-8/v8.0.21/bin/apache-tomcat-8.0.21.tar.gz"
+TOMCAT_FILE="apache-tomcat-8.0.21.tar.gz"
+TOMCAT_LOCATION="/opt/apache-tomcat/tomcat8"
+
+# MySQL Connector Java
+MYSQL_CONNECTOR_LINK="http://mirror.cogentco.com/pub/mysql/Connector-J/mysql-connector-java-5.1.34.zip"
+MYSQL_CONNECTOR_ZIP_FILE="mysql-connector-java-5.1.34.zip"
+MYSQL_CONNECTOR_FILE="mysql-connector-java-5.1.34/mysql-connector-java-5.1.34-bin.jar"
+
+# Kuali Release File
+KC_RELEASE_LINK="http://downloads.kc.kuali.org/6.0/kc-release-6_0.zip"
+KC_RELEASE_FILE="kc-release-6_0.zip"
+KC_SOURCE_LOCATION="/opt/kuali/source/6.0"
+KC_CONFIG_XML_LOC="/opt/kuali/main/dev"
+
+# CLEAN-UP
+CLEANUP_LOCATIONS="/opt/apache-tomcat /opt/kuali"
+
 clear
 
 echo "**********************************************************************************************"
@@ -89,40 +108,59 @@ fi
 InstallHomeFolder=`pwd`
 
 ### GETTING THE IP ADDRESS
-if [[ $DISTRIBUTATION_VERSION == 7 ]]; then
-	ip_address=`ifconfig eth0 2>/dev/null|awk '/inet / {print $2}'|sed 's/addr://'`
-else
-	ip_address=`ifconfig eth0 2>/dev/null|awk '/inet addr:/ {print $2}'|sed 's/addr://'`
-fi
+ip_address=`ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}' | cut -f1  -d'/'`
+
+#if [[ $DISTRIBUTATION_VERSION == 7 ]]; then
+#	ip_address=`ifconfig eth0 2>/dev/null|awk '/inet / {print $2}'|sed 's/addr://'`
+#else
+#	ip_address=`ifconfig eth0 2>/dev/null|awk '/inet addr:/ {print $2}'|sed 's/addr://'`
+#fi
 
 ### DOING SOME CLEAN-UP
-rm -fr /opt/apache-tomcat-6.0.39 /opt/kuali /opt/kuali_coeus
+rm -fr $CLEANUP_LOCATIONS
+mysqladmin -u username -ppassword drop --force kuali
 
 ### SETTING UP TOMCAT
 if [ -f /etc/debian_version ]; then
-	apt-get install -y wget unzip openjdk-6-jdk mailutils
+	apt-get install -y wget unzip openjdk-7-jdk mailutils
 elif [ -f /etc/redhat-release ]; then
-	yum install -y wget unzip java-1.6.0-openjdk mailx
+	yum install -y wget unzip java-1.7.0-openjdk mailx
 fi
 
 cd /opt
-wget http://psg.mtu.edu/pub/apache/tomcat/tomcat-6/v6.0.39/bin/apache-tomcat-6.0.39.tar.gz
-tar zxvf apache-tomcat-6.0.39.tar.gz
-wget http://mirror.cogentco.com/pub/mysql/Connector-J/mysql-connector-java-5.1.30.zip
-unzip mysql-connector-java-5.1.30.zip
-cp mysql-connector-java-5.1.30/mysql-connector-java-5.1.30-bin.jar /opt/apache-tomcat-6.0.39/lib
-rm -fr mysql-connector-java* apache-tomcat-6.0.39.tar.gz
-cp $InstallHomeFolder/catalina.sh /opt/apache-tomcat-6.0.39/bin/catalina.sh
-cd /opt/apache-tomcat-6.0.39/bin
+if [ -f $TOMCAT_FILE ]; then
+        echo "$TOMCAT_FILE exist"
+else
+	wget $TOMCAT_LINK
+fi
+
+mkdir -p $TOMCAT_LOCATION
+tar --strip-components=1 -zxvf $TOMCAT_FILE -C $TOMCAT_LOCATION
+
+if [ -f $MYSQL_CONNECTOR_ZIP_FILE ]; then
+        echo "$MYSQL_CONNECTOR_ZIP_FILE exist"
+else
+	wget $MYSQL_CONNECTOR_LINK
+fi
+
+unzip -j $MYSQL_CONNECTOR_ZIP_FILE $MYSQL_CONNECTOR_FILE -d $TOMCAT_LOCATION/lib
+rm -fr mysql-connector-java* apache-tomcat-*.tar.gz
+cp $InstallHomeFolder/setenv.sh $TOMCAT_LOCATION/bin
+cd $TOMCAT_LOCATION/bin
 chmod +x *.sh
 
-### DOWNLOAD KUALI COEUS 5.2.1
-mkdir -p /opt/kuali_coeus/
-cd /opt/kuali_coeus/
-wget http://downloads.kc.kuali.org/5.0/kc-release-5_2_1.zip
-unzip kc-release-5_2_1.zip
-rm -fr kc-release-5_2_1.zip
+### DOWNLOAD KUALI COEUS 6.0
+
 cd /opt
+if [ -f $KC_RELEASE_FILE ]; then
+	echo "$KC_RELEASE_FILE exist"
+else
+	wget $KC_RELEASE_LINK
+fi
+
+mkdir -p $KC_SOURCE_LOCATION
+unzip $KC_RELEASE_FILE -d $KC_SOURCE_LOCATION
+rm -fr $KC_RELEASE_FILE
 
 ### SETUP MySQL
 if [ -f /etc/debian_version ]; then
@@ -142,17 +180,17 @@ echo
 echo
 echo "This may take a few minutes... Running the Kuali Coeus Database Scripts"
 mysql -u ${mysql_username} -p${mysql_password} < configure_mysql.sql > mysql.out
-rm -f /opt/kuali_coeus/db_scripts/main/LOGS/*
-cp get_mysql_errors /opt/kuali_coeus/db_scripts/main/LOGS/
-cp J_KC_Install.sh /opt/kuali_coeus/db_scripts/main/
+rm -fr $KC_SOURCE_LOCATION/db_scripts/main/LOGS
+cp J_KC_Install.sh $KC_SOURCE_LOCATION/db_scripts/main/
 
-cd /opt/kuali_coeus/db_scripts/main/
+cd $KC_SOURCE_LOCATION/db_scripts/main/
 chmod 0777 *.sh
 ./J_KC_Install.sh
-cd /opt/kuali_coeus/db_scripts/main/LOGS
+cp $InstallHomeFolder/get_mysql_errors $KC_SOURCE_LOCATION/db_scripts/main/LOGS/
+cd $KC_SOURCE_LOCATION/db_scripts/main/LOGS
 ./get_mysql_errors
 
-grep ERROR /opt/kuali_coeus/db_scripts/main/LOGS/UPGRADE_ERRORS*
+grep ERROR $KC_SOURCE_LOCATION/db_scripts/main/LOGS/UPGRADE_ERRORS*
 if [ $? -eq 0 ]; then
 	echo " Errors were FOUND "
 	mail -s "Your Database Setup has been completed WITH errors" $email_address < UPGRADE_ERRORS*
@@ -167,19 +205,18 @@ for i in $( ps -ef | grep -v "grep" | grep "tomcat" | awk '{print $2}' ); do
 done
 
 ### SETTING UP THE KC APPLICATION
-mkdir -p /opt/kuali/main/dev/
-cp $InstallHomeFolder/kc-config.xml /opt/kuali/main/dev/kc-config.xml
-sed -i "s/127.0.0.1/$ip_address/" /opt/kuali/main/dev/kc-config.xml
+mkdir -p $KC_CONFIG_XML_LOC
+cp $InstallHomeFolder/kc-config.xml $KC_CONFIG_XML_LOC/kc-config.xml
+sed -i "s/127.0.0.1/$ip_address/" $KC_CONFIG_XML_LOC/kc-config.xml
 
-rm -fr /opt/apache-tomcat-6.0.39/webapps/kc-*
-cd /opt/kuali_coeus/binary/
-cp kc-ptd.war /opt/apache-tomcat-6.0.39/webapps/kc-dev.war
-cd /opt/apache-tomcat-6.0.39/bin
+rm -fr $TOMCAT_LOCATION/webapps/kc-*
+cp -f $KC_SOURCE_LOCATION/binary/kc-ptd.war $TOMCAT_LOCATION/webapps/kc-dev.war
+cd $TOMCAT_LOCATION/bin
 ./startup.sh
 
-tailf /opt/apache-tomcat-6.0.39/logs/catalina.out &
-   regex="Server startup in"
-      tailf /opt/apache-tomcat-6.0.39/logs/catalina.out | while read line; do
+tailf $TOMCAT_LOCATION/logs/catalina.out &
+   regex="initialization completed in"
+      tailf $TOMCAT_LOCATION/logs/catalina.out | while read line; do
 	if [[ $line =~ $regex ]]; then
 		pkill -9 -P $$ tailf
 	fi
